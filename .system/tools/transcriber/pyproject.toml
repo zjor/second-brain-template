@@ -1,0 +1,17 @@
+[project]
+name = "transcriber"
+version = "0.1.0"
+description = "Deepgram nova-3 transcription with speaker diarization for the second brain inbox"
+authors = [{ name = "you", email = "you@example.com" }]
+requires-python = ">=3.12,<4.0"
+dependencies = [
+    "deepgram-sdk (>=3.0,<4.0)",
+    "python-dotenv (>=1.0,<2.0)",
+]
+
+[tool.poetry]
+package-mode = false
+
+[build-system]
+requires = ["poetry-core>=2.0"]
+build-backend = "poetry.core.masonry.api"
