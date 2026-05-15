@@ -4,7 +4,7 @@ description: Sync with the remote — pull, merge local changes via a temp branc
 allowed-tools: Bash(git status:*), Bash(git diff:*), Bash(git log:*), Bash(git add:*), Bash(git commit:*), Bash(git checkout:*), Bash(git branch:*), Bash(git pull:*), Bash(git push:*), Bash(git merge:*), Bash(date:*), Read, Edit
 ---
 
-Pull from the remote, merge local work via a temporary branch, push to the default branch (`main`).
+Pull from the remote, merge local work via a temporary branch, push to the default branch (`master`).
 
 ## Steps
 
@@ -29,16 +29,16 @@ Pull from the remote, merge local work via a temporary branch, push to the defau
 
    ```bash
    git commit -m "<your one-line summary>"
-   git checkout main
+   git checkout master
    ```
 
 3. **Pull the latest from remote**
 
    ```bash
-   git pull origin main
+   git pull origin master
    ```
 
-4. **Merge the sync branch into main**
+4. **Merge the sync branch into master**
 
    ```bash
    git merge --no-ff "$BRANCH"
@@ -54,7 +54,7 @@ Pull from the remote, merge local work via a temporary branch, push to the defau
 5. **Push**
 
    ```bash
-   git push origin main
+   git push origin master
    ```
 
 6. **Cleanup**
@@ -75,5 +75,5 @@ Pull from the remote, merge local work via a temporary branch, push to the defau
 ## Safety
 
 - Never run `git push --force` here.
-- Never delete `main`.
+- Never delete `master`.
 - If anything fails mid-flow, stop and report — don't auto-recover with destructive operations.
