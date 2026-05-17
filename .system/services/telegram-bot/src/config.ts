@@ -4,7 +4,7 @@ const envSchema = z.object({
   TELEGRAM_BOT_TOKEN: z.string().min(1),
   TG_ALLOWED_USER_IDS: z.string().min(1),
   DEEPGRAM_API_KEY: z.string().min(1),
-  ANTHROPIC_API_KEY: z.string().min(1),
+  ANTHROPIC_API_KEY: z.string().optional(),
   BRAIN_REPO_URL: z.string().min(1),
   SESSION_TTL_MINUTES: z.coerce.number().int().positive().default(30),
   NOTIFY_PORT: z.coerce.number().int().positive().default(8080),
@@ -17,7 +17,7 @@ export interface Config {
   telegramBotToken: string;
   allowedUserIds: Set<number>;
   deepgramApiKey: string;
-  anthropicApiKey: string;
+  anthropicApiKey: string | undefined;
   brainRepoUrl: string;
   sessionTtlMinutes: number;
   notifyPort: number;
