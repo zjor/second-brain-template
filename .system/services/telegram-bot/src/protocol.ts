@@ -39,3 +39,16 @@ export function parseClaudeOutput(stdout: string): ParsedClaudeOutput {
   const body = stdout.slice(0, match.index).replace(/\s+$/, "");
   return { body, tg: result.data };
 }
+
+export interface InlineKeyboardMarkup {
+  inline_keyboard: { text: string; callback_data: string }[][];
+}
+
+export function tgBlockToReplyMarkup(tg: TgBlock): InlineKeyboardMarkup | undefined {
+  if (!tg.keyboard.length) return undefined;
+  return {
+    inline_keyboard: tg.keyboard.map((row) =>
+      row.map((btn) => ({ text: btn.text, callback_data: btn.data }))
+    ),
+  };
+}

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseClaudeOutput, type TgBlock } from "../src/protocol";
+import { parseClaudeOutput, tgBlockToReplyMarkup, type TgBlock } from "../src/protocol";
 
 describe("parseClaudeOutput", () => {
   it("returns the full text as body when no tg block is present", () => {
@@ -52,5 +52,34 @@ describe("parseClaudeOutput", () => {
       disable_preview: true,
       keyboard: [],
     });
+  });
+});
+
+describe("tgBlockToReplyMarkup", () => {
+  it("returns undefined when keyboard is empty", () => {
+    expect(tgBlockToReplyMarkup({ keyboard: [] })).toBeUndefined();
+  });
+
+  it("maps a single-row keyboard to inline_keyboard with callback_data", () => {
+    const markup = tgBlockToReplyMarkup({
+      keyboard: [[{ text: "Yes", data: "yes" }, { text: "No", data: "no" }]],
+    });
+    expect(markup).toEqual({
+      inline_keyboard: [[
+        { text: "Yes", callback_data: "yes" },
+        { text: "No", callback_data: "no" },
+      ]],
+    });
+  });
+
+  it("preserves row structure across multiple rows", () => {
+    const markup = tgBlockToReplyMarkup({
+      keyboard: [
+        [{ text: "A", data: "a" }],
+        [{ text: "B", data: "b" }, { text: "C", data: "c" }],
+      ],
+    });
+    expect(markup?.inline_keyboard).toHaveLength(2);
+    expect(markup?.inline_keyboard?.[1]).toHaveLength(2);
   });
 });
