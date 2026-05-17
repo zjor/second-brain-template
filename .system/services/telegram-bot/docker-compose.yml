@@ -1,0 +1,25 @@
+services:
+  telegram-brain-bot:
+    build: .
+    image: telegram-brain-bot:latest
+    container_name: telegram-brain-bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - brain-data:/data/brain
+      - bot-db:/data/db
+      - bot-home:/home/bot
+      - ./ssh-deploy-key:/home/bot/.ssh/id_ed25519:ro
+    # /notify is bound to 127.0.0.1 inside the container; not exposed to host.
+    networks:
+      - bot-net
+
+volumes:
+  brain-data:
+  bot-db:
+  bot-home:
+
+networks:
+  bot-net:
+    driver: bridge

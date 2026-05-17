@@ -8,3 +8,10 @@ venv/
 .DS_Store
 .idea/
 *.swp
+
+# telegram-bot build artifacts
+.system/services/telegram-bot/node_modules/
+.system/services/telegram-bot/dist/
+.system/services/telegram-bot/.env
+.system/services/telegram-bot/coverage/
+.system/services/telegram-bot/*.log
