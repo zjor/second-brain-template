@@ -3,3 +3,5 @@ dist/
 .env
 *.log
 coverage/
+ssh-deploy-key
+ssh-deploy-key.pub
