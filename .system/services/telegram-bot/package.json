@@ -1,0 +1,32 @@
+{
+  "name": "telegram-brain-bot",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=24" },
+  "scripts": {
+    "build": "tsc",
+    "dev": "node --env-file=.env --import tsx src/index.ts",
+    "start": "node --env-file=.env dist/index.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@deepgram/sdk": "^4.0.0",
+    "@hono/node-server": "^1.13.0",
+    "better-sqlite3": "^11.5.0",
+    "grammy": "^1.31.0",
+    "hono": "^4.6.0",
+    "proper-lockfile": "^4.1.2",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.11",
+    "@types/node": "^22.7.0",
+    "@types/proper-lockfile": "^4.1.4",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  }
+}
