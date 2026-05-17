@@ -36,6 +36,11 @@ function commitMessage(input: string): string {
   return cleaned ? `tg: ${cleaned}` : `tg: claude turn ${new Date().toISOString()}`;
 }
 
+function preview(text: string, max: number): string {
+  const collapsed = text.replace(/\s+/g, " ").trim();
+  return collapsed.length > max ? `${collapsed.slice(0, max)}…` : collapsed;
+}
+
 export function createBot(deps: BotDeps): Bot {
   const { config, sessions, git, brainCwd, promptPath } = deps;
   const bot = new Bot(config.telegramBotToken);
@@ -75,6 +80,14 @@ export function createBot(deps: BotDeps): Bot {
 
       const existing = sessions.get(ctx.from!.id);
       let result;
+      const startedAt = Date.now();
+      log("info", "claude_invoke", {
+        from: ctx.from!.id,
+        chat_id: ctx.chat!.id,
+        session_id: existing?.claudeSessionId ?? "new",
+        prompt_len: text.length,
+        prompt_preview: preview(text, 80),
+      });
       try {
         result = await runClaude({
           brainCwd,
@@ -85,10 +98,22 @@ export function createBot(deps: BotDeps): Bot {
           notifyPort: config.notifyPort,
         });
       } catch (e) {
-        log("error", "claude_failed", { msg: (e as Error).message });
+        log("error", "claude_failed", {
+          from: ctx.from!.id,
+          duration_ms: Date.now() - startedAt,
+          msg: (e as Error).message,
+        });
         await ctx.reply("Internal error processing your message. Check docker logs.");
         return;
       }
+      log("info", "claude_response", {
+        from: ctx.from!.id,
+        session_id: result.sessionId,
+        duration_ms: Date.now() - startedAt,
+        body_len: result.body.length,
+        body_preview: preview(result.body, 120),
+        has_tg_block: result.tg !== null,
+      });
 
       sessions.upsert(ctx.from!.id, result.sessionId, ctx.chat!.id);
 
@@ -110,7 +135,9 @@ export function createBot(deps: BotDeps): Bot {
       }
 
       if (await git.isDirty()) {
-        await git.commit(commitMessage(text));
+        const msg = commitMessage(text);
+        await git.commit(msg);
+        log("info", "git_committed", { msg });
         try {
           await git.push();
           log("info", "git_pushed");
@@ -124,11 +151,24 @@ export function createBot(deps: BotDeps): Bot {
   // Text messages (not commands).
   bot.on("message:text", async (ctx) => {
     if (ctx.message.text.startsWith("/")) return; // handled by command handlers
+    log("info", "message_received", {
+      kind: "text",
+      from: ctx.from?.id,
+      chat: ctx.chat?.id,
+      text_len: ctx.message.text.length,
+    });
     await handleUserTurn(ctx, ctx.message.text);
   });
 
   // Voice messages.
   bot.on("message:voice", async (ctx) => {
+    log("info", "message_received", {
+      kind: "voice",
+      from: ctx.from?.id,
+      chat: ctx.chat?.id,
+      voice_duration: ctx.message.voice.duration,
+      voice_size: ctx.message.voice.file_size,
+    });
     let transcript: string;
     try {
       const audio = await downloadVoice(bot, ctx.message.voice.file_id);
@@ -140,12 +180,21 @@ export function createBot(deps: BotDeps): Bot {
       );
       return;
     }
-    await ctx.reply(`Heard: ${transcript}`);
+    log("info", "voice_transcribed", {
+      len: transcript.length,
+      transcript_preview: preview(transcript, 120),
+    });
+    await ctx.reply(`✍️ ${transcript}`);
     await handleUserTurn(ctx, transcript);
   });
 
   // Callback queries from inline keyboards.
   bot.on("callback_query:data", async (ctx) => {
+    log("info", "message_received", {
+      kind: "callback",
+      from: ctx.from?.id,
+      data: ctx.callbackQuery.data,
+    });
     await ctx.answerCallbackQuery();
     if (ctx.callbackQuery.message) {
       try {
