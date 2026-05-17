@@ -10,6 +10,8 @@ export interface RunClaudeOptions {
   promptPath: string;
   prompt: string;
   sessionId: string | null;
+  chatId?: number;
+  notifyPort?: number;
   env?: Record<string, string>;
 }
 
@@ -36,6 +38,8 @@ export async function runClaude(opts: RunClaudeOptions): Promise<ClaudeRunResult
       env: {
         ...process.env,
         TG_MODE: "1",
+        ...(opts.chatId !== undefined ? { NOTIFY_CHAT_ID: String(opts.chatId) } : {}),
+        ...(opts.notifyPort !== undefined ? { NOTIFY_PORT: String(opts.notifyPort) } : {}),
         ...(opts.env ?? {}),
       },
       maxBuffer: 16 * 1024 * 1024,

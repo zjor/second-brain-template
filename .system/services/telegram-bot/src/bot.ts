@@ -81,6 +81,8 @@ export function createBot(deps: BotDeps): Bot {
           promptPath,
           prompt: text,
           sessionId: existing?.claudeSessionId ?? null,
+          chatId: ctx.chat!.id,
+          notifyPort: config.notifyPort,
         });
       } catch (e) {
         log("error", "claude_failed", { msg: (e as Error).message });
