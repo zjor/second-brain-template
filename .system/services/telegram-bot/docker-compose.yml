@@ -9,8 +9,8 @@ services:
     volumes:
       - brain-data:/data/brain
       - bot-db:/data/db
-      - claude-config:/root/.claude
-      - ./ssh-deploy-key:/root/.ssh/id_ed25519:ro
+      - bot-home:/home/bot
+      - ./ssh-deploy-key:/home/bot/.ssh/id_ed25519:ro
     # /notify is bound to 127.0.0.1 inside the container; not exposed to host.
     networks:
       - bot-net
@@ -18,7 +18,7 @@ services:
 volumes:
   brain-data:
   bot-db:
-  claude-config:
+  bot-home:
 
 networks:
   bot-net:
