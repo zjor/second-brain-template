@@ -1,23 +1,41 @@
 # Telegram Mode
 
-You are running inside the Telegram bot container. The user is communicating with you via Telegram, not a terminal.
+You are running inside the Telegram bot container. The user reaches you through Telegram, not a terminal. **Telegram supports rich inline keyboards (buttons) and you have a protocol to emit them — see the "Inline keyboards" section below. Never tell the user "I can't send buttons"; you can.**
 
 ## Channel constraints
 
 - Each of your replies is delivered as a single Telegram message. Maximum 4096 characters per message — keep replies tight.
 - The user cannot see your tool calls, thinking, or intermediate output. Only your final assistant message reaches them.
 - There is no terminal UI. The following tools/behaviors WILL HANG the session and must not be used:
-  - `AskUserQuestion`
+  - `AskUserQuestion` — **substitute with a `tg` keyboard block instead** (see below).
   - Any prompt-style tool that waits for stdin
   - `ExitPlanMode` (no plan-approval UI exists)
+- What you DO have for interactive choice: **inline keyboards via the `tg` block protocol** (next section). Use them whenever a reply has a small finite set of expected answers.
 
-## How to ask the user a question
+## Inline keyboards — REQUIRED for finite-choice replies
 
-When you would normally use `AskUserQuestion` or present choices, instead end your reply with a fenced code block tagged `tg`:
+**You CAN and MUST send Telegram inline keyboards.** The mechanism: append a fenced ` ```tg ` JSON block at the end of your reply — the bot parses it, strips it from the body, and renders an inline keyboard under your message. Buttons tap → next turn arrives as `[user clicked: <data>]`.
+
+**Never say "I can't send buttons" or "reply with a number / yes / no in text".** That is wrong. You have buttons. Use them.
+
+### When to emit a `tg` keyboard block
+
+Use a keyboard whenever ANY of these are true:
+
+1. The user explicitly asks for buttons, choices, options, menu, keyboard, варианты, кнопки, выбор, etc.
+2. Your reply ends with a question that has a **small, finite set of natural answers** (≤6). Examples:
+   - Yes/no, confirm/cancel, approve/skip, save/discard
+   - "Which of these three options…" / "Pick one of: A, B, C"
+   - "Move to X?" / "Continue?" / "Retry?"
+3. You would normally have called `AskUserQuestion` on desktop.
+4. Skill workflow expects a choice (e.g. PARA destination suggestions, file-index flow).
+
+If the reply is open-ended ("describe your day", "what would you like to capture") — no keyboard, free-text only.
+
+### Block format
 
 ```tg
 {
-  "parse_mode": "MarkdownV2",
   "keyboard": [
     [{"text": "Apply all", "data": "apply_all"}],
     [{"text": "Skip",      "data": "skip"}]
@@ -25,14 +43,35 @@ When you would normally use `AskUserQuestion` or present choices, instead end yo
 }
 ```
 
-Rules for the block:
+Rules:
 
-- Must be the trailing content of your reply.
-- `keyboard` is a 2D array (rows × columns) of `{ text, data }` button objects.
-- `data` is a short semantic token you invent. It will be echoed back to you verbatim when the user taps the button (as `[user clicked: <data>]`). Use lowercase snake_case, ≤32 chars (`apply_all`, `opt_a`, `skip`).
-- `parse_mode` is optional; one of `Markdown`, `MarkdownV2`, `HTML`. Omit for plain text.
-- `disable_preview: true` is optional.
-- If the block is malformed, the bot will send your entire reply as plain text. Validate your JSON.
+- Must be the **trailing content** of your reply — nothing after the closing ```` ``` ````.
+- `keyboard` is a 2D array (rows × columns) of `{ text, data }` objects.
+- `text`: the visible button label. Can be any string (emoji OK).
+- `data`: short semantic token YOU invent, lowercase snake_case, ≤32 chars (`apply_all`, `move_archive`, `skip`). Echoed back as `[user clicked: <data>]`. Remember in your next turn what each token meant.
+- Omit `parse_mode` (bot auto-converts body to MarkdownV2). Set only to `"HTML"` if you wrote real HTML.
+- `disable_preview: true` optional, suppresses link previews.
+- Invalid JSON → bot sends your entire reply as plain text (including the broken block). Validate.
+
+### Examples — wrong vs. right
+
+**Wrong** (don't do this):
+> Как ты себя чувствуешь? 1. Отлично 2. Так себе 3. Плохо — ответь номером или текстом.
+
+**Right**:
+> Как ты себя сегодня?
+> ```tg
+> {"keyboard": [[{"text": "Отлично", "data": "mood_great"}], [{"text": "Так себе", "data": "mood_meh"}], [{"text": "Плохо", "data": "mood_bad"}]]}
+> ```
+
+**Wrong**:
+> Save this to `inbox/dump.md`? Reply yes or no.
+
+**Right**:
+> Save this to `inbox/dump.md`?
+> ```tg
+> {"keyboard": [[{"text": "Yes, save", "data": "dump_save"}, {"text": "No", "data": "dump_skip"}]]}
+> ```
 
 ## Sending progress updates during long tasks
 
