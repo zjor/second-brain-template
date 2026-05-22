@@ -1,10 +1,29 @@
-import { Bot, type Context } from "grammy";
+import { Bot, type Context, InlineKeyboard } from "grammy";
+import { mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import type { Config } from "./config";
 import type { SessionStore } from "./session";
 import type { GitRepo } from "./git";
 import { runClaude } from "./claude";
 import { tgBlockToReplyMarkup } from "./protocol";
 import { transcribeVoice } from "./voice";
+import {
+  ensureUniqueFilename,
+  extFromMime,
+  generatePhotoFilename,
+  sanitizeFilename,
+} from "./upload";
+import telegramifyMarkdown from "telegramify-markdown";
+
+function renderForTelegram(
+  body: string,
+  parseMode: "Markdown" | "MarkdownV2" | "HTML" | undefined
+): { text: string; parse_mode: "MarkdownV2" | "HTML" | undefined } {
+  // HTML: trust Claude — pass through.
+  if (parseMode === "HTML") return { text: body, parse_mode: "HTML" };
+  // Default + legacy "Markdown" + explicit "MarkdownV2": convert via telegramify-markdown.
+  return { text: telegramifyMarkdown(body, "escape"), parse_mode: "MarkdownV2" };
+}
 
 interface BotDeps {
   config: Config;
@@ -22,12 +41,26 @@ function isAllowed(ctx: Context, allowed: Set<number>): boolean {
   return !!ctx.from && allowed.has(ctx.from.id);
 }
 
-async function downloadVoice(bot: Bot, fileId: string): Promise<Buffer> {
+function startTypingHeartbeat(bot: Bot, chatId: number): () => void {
+  let stopped = false;
+  const beat = () => {
+    if (stopped) return;
+    bot.api.sendChatAction(chatId, "typing").catch(() => {});
+  };
+  beat();
+  const id = setInterval(beat, 4000);
+  return () => {
+    stopped = true;
+    clearInterval(id);
+  };
+}
+
+async function downloadTelegramFile(bot: Bot, fileId: string): Promise<Buffer> {
   const file = await bot.api.getFile(fileId);
   if (!file.file_path) throw new Error("Telegram getFile returned no file_path");
   const url = `https://api.telegram.org/file/bot${bot.token}/${file.file_path}`;
   const res = await fetch(url);
-  if (!res.ok) throw new Error(`Voice download failed: HTTP ${res.status}`);
+  if (!res.ok) throw new Error(`File download failed: HTTP ${res.status}`);
   return Buffer.from(await res.arrayBuffer());
 }
 
@@ -54,6 +87,18 @@ export function createBot(deps: BotDeps): Bot {
     await next();
   });
 
+  // Per-user FIFO queue: serializes message handling for the same user.
+  const userQueues = new Map<number, Promise<unknown>>();
+  function enqueueUserWork<T>(userId: number, work: () => Promise<T>): Promise<T> {
+    const tail = userQueues.get(userId) ?? Promise.resolve();
+    const next = tail.then(work, work);
+    userQueues.set(
+      userId,
+      next.catch(() => {})
+    );
+    return next as Promise<T>;
+  }
+
   // Bot-level commands.
   bot.command("start", (ctx) =>
     ctx.reply("Brain bot ready. Send text or voice. /reset clears the session.")
@@ -69,7 +114,10 @@ export function createBot(deps: BotDeps): Bot {
 
   async function handleUserTurn(ctx: Context, text: string): Promise<void> {
     if (!ctx.from || !ctx.chat) return;
-    await git.withLock(async () => {
+    const stopTyping = startTypingHeartbeat(bot, ctx.chat.id);
+    try {
+    try {
+      await git.withLock(async () => {
       try {
         await git.pull();
       } catch (e) {
@@ -118,11 +166,11 @@ export function createBot(deps: BotDeps): Bot {
       sessions.upsert(ctx.from!.id, result.sessionId, ctx.chat!.id);
 
       const replyMarkup = result.tg ? tgBlockToReplyMarkup(result.tg) : undefined;
-      const parseMode = result.tg?.parse_mode;
       const body = result.body || "(empty)";
+      const rendered = renderForTelegram(body, result.tg?.parse_mode);
       try {
-        await ctx.reply(body, {
-          parse_mode: parseMode,
+        await ctx.reply(rendered.text, {
+          parse_mode: rendered.parse_mode,
           link_preview_options: result.tg?.disable_preview
             ? { is_disabled: true }
             : undefined,
@@ -145,54 +193,205 @@ export function createBot(deps: BotDeps): Bot {
           log("error", "git_push_failed", { msg: (e as Error).message });
         }
       }
-    });
+      });
+    } catch (e) {
+      const err = e as { code?: string; message?: string };
+      if (err.code === "ELOCKED") {
+        log("warn", "git_lock_timeout", { from: ctx.from!.id });
+        await ctx.reply("Still working on a previous message — try again in a moment.");
+      } else {
+        log("error", "turn_failed", { msg: err.message ?? String(e) });
+        await ctx.reply("Internal error. Check docker logs.");
+      }
+    }
+    } finally {
+      stopTyping();
+    }
   }
 
   // Text messages (not commands).
   bot.on("message:text", async (ctx) => {
     if (ctx.message.text.startsWith("/")) return; // handled by command handlers
+    if (!ctx.from) return;
     log("info", "message_received", {
       kind: "text",
-      from: ctx.from?.id,
+      from: ctx.from.id,
       chat: ctx.chat?.id,
       text_len: ctx.message.text.length,
     });
-    await handleUserTurn(ctx, ctx.message.text);
+    await enqueueUserWork(ctx.from.id, () => handleUserTurn(ctx, ctx.message.text));
   });
 
   // Voice messages.
   bot.on("message:voice", async (ctx) => {
+    if (!ctx.from) return;
     log("info", "message_received", {
       kind: "voice",
-      from: ctx.from?.id,
+      from: ctx.from.id,
       chat: ctx.chat?.id,
       voice_duration: ctx.message.voice.duration,
       voice_size: ctx.message.voice.file_size,
     });
-    let transcript: string;
-    try {
-      const audio = await downloadVoice(bot, ctx.message.voice.file_id);
-      transcript = await transcribeVoice(audio, config.deepgramApiKey);
-    } catch (e) {
-      log("error", "voice_failed", { msg: (e as Error).message });
-      await ctx.reply(
-        `Voice transcription failed: ${(e as Error).message}. file_id: ${ctx.message.voice.file_id}`
-      );
-      return;
-    }
-    log("info", "voice_transcribed", {
-      len: transcript.length,
-      transcript_preview: preview(transcript, 120),
+    await enqueueUserWork(ctx.from.id, async () => {
+      let transcript: string;
+      const stopTyping = ctx.chat ? startTypingHeartbeat(bot, ctx.chat.id) : () => {};
+      try {
+        const audio = await downloadTelegramFile(bot, ctx.message.voice.file_id);
+        transcript = await transcribeVoice(audio, config.deepgramApiKey);
+      } catch (e) {
+        log("error", "voice_failed", { msg: (e as Error).message });
+        await ctx.reply(
+          `Voice transcription failed: ${(e as Error).message}. file_id: ${ctx.message.voice.file_id}`
+        );
+        return;
+      } finally {
+        stopTyping();
+      }
+      log("info", "voice_transcribed", {
+        len: transcript.length,
+        transcript_preview: preview(transcript, 120),
+      });
+      await ctx.reply(`✍️ ${transcript}`);
+      await handleUserTurn(ctx, transcript);
     });
-    await ctx.reply(`✍️ ${transcript}`);
-    await handleUserTurn(ctx, transcript);
+  });
+
+  async function saveUpload(
+    ctx: Context,
+    kind: "document" | "photo",
+    fileBuf: Buffer,
+    filename: string
+  ): Promise<void> {
+    if (!ctx.from || !ctx.chat) return;
+    const relPath = `inbox/files/${filename}`;
+    const absDir = join(brainCwd, "inbox", "files");
+    const absPath = join(absDir, filename);
+
+    await git.withLock(async () => {
+      try {
+        await git.pull();
+      } catch (e) {
+        log("error", "git_pull_failed", { msg: (e as Error).message });
+        await ctx.reply("Sync conflict — please resolve on desktop and try again.");
+        return;
+      }
+      mkdirSync(absDir, { recursive: true });
+      writeFileSync(absPath, fileBuf);
+      log("info", "file_saved", {
+        from: ctx.from!.id,
+        kind,
+        path: relPath,
+        bytes: fileBuf.length,
+      });
+
+      if (await git.isDirty()) {
+        const msg = `tg: upload ${filename}`.slice(0, 72);
+        await git.commit(msg);
+        log("info", "git_committed", { msg });
+        try {
+          await git.push();
+          log("info", "git_pushed");
+        } catch (e) {
+          log("error", "git_push_failed", { msg: (e as Error).message });
+        }
+      }
+
+      const keyboard = new InlineKeyboard()
+        .text("📇 Index", "idx")
+        .text("Skip", "skp");
+      const rendered = renderForTelegram(
+        `📥 Saved \`${relPath}\`\nIndex this file?`,
+        undefined
+      );
+      const sent = await ctx.reply(rendered.text, {
+        parse_mode: rendered.parse_mode,
+        reply_markup: keyboard,
+      });
+      sessions.putCallback(sent.message_id, "idx", `index_file ${relPath}`);
+      sessions.putCallback(sent.message_id, "skp", "skip_index");
+    });
+  }
+
+  // Document uploads (any file).
+  bot.on("message:document", async (ctx) => {
+    if (!ctx.from) return;
+    const doc = ctx.message.document;
+    log("info", "message_received", {
+      kind: "document",
+      from: ctx.from.id,
+      chat: ctx.chat?.id,
+      file_name: doc.file_name,
+      mime_type: doc.mime_type,
+      file_size: doc.file_size,
+    });
+    await enqueueUserWork(ctx.from.id, async () => {
+      const stopTyping = ctx.chat ? startTypingHeartbeat(bot, ctx.chat.id) : () => {};
+      let buf: Buffer;
+      try {
+        buf = await downloadTelegramFile(bot, doc.file_id);
+      } catch (e) {
+        log("error", "file_download_failed", { msg: (e as Error).message });
+        stopTyping();
+        await ctx.reply(`Download failed: ${(e as Error).message}`);
+        return;
+      }
+      const base = doc.file_name
+        ? sanitizeFilename(doc.file_name)
+        : `${new Date().toISOString().slice(0, 10)}-doc${extFromMime(doc.mime_type)}`;
+      const absDir = join(brainCwd, "inbox", "files");
+      mkdirSync(absDir, { recursive: true });
+      const filename = ensureUniqueFilename(absDir, base);
+      try {
+        await saveUpload(ctx, "document", buf, filename);
+      } finally {
+        stopTyping();
+      }
+    });
+  });
+
+  // Photo uploads (compressed image messages).
+  bot.on("message:photo", async (ctx) => {
+    if (!ctx.from) return;
+    const photos = ctx.message.photo;
+    const largest = photos[photos.length - 1];
+    log("info", "message_received", {
+      kind: "photo",
+      from: ctx.from.id,
+      chat: ctx.chat?.id,
+      caption: ctx.message.caption,
+      file_size: largest.file_size,
+      width: largest.width,
+      height: largest.height,
+    });
+    await enqueueUserWork(ctx.from.id, async () => {
+      const stopTyping = ctx.chat ? startTypingHeartbeat(bot, ctx.chat.id) : () => {};
+      let buf: Buffer;
+      try {
+        buf = await downloadTelegramFile(bot, largest.file_id);
+      } catch (e) {
+        log("error", "file_download_failed", { msg: (e as Error).message });
+        stopTyping();
+        await ctx.reply(`Download failed: ${(e as Error).message}`);
+        return;
+      }
+      const base = generatePhotoFilename(ctx.message.caption);
+      const absDir = join(brainCwd, "inbox", "files");
+      mkdirSync(absDir, { recursive: true });
+      const filename = ensureUniqueFilename(absDir, base);
+      try {
+        await saveUpload(ctx, "photo", buf, filename);
+      } finally {
+        stopTyping();
+      }
+    });
   });
 
   // Callback queries from inline keyboards.
   bot.on("callback_query:data", async (ctx) => {
+    if (!ctx.from) return;
     log("info", "message_received", {
       kind: "callback",
-      from: ctx.from?.id,
+      from: ctx.from.id,
       data: ctx.callbackQuery.data,
     });
     await ctx.answerCallbackQuery();
@@ -213,7 +412,13 @@ export function createBot(deps: BotDeps): Bot {
         sessions.deleteCallback(messageId, data);
       }
     }
-    await handleUserTurn(ctx, `[user clicked: ${intent}]`);
+    if (intent === "skip_index") {
+      await ctx.reply("Skipped.");
+      return;
+    }
+    await enqueueUserWork(ctx.from.id, () =>
+      handleUserTurn(ctx, `[user clicked: ${intent}]`)
+    );
   });
 
   return bot;

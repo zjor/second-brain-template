@@ -40,6 +40,9 @@ RUN useradd -m -s /bin/bash bot
 COPY --from=builder --chown=bot:bot /app/node_modules ./node_modules
 COPY --from=builder --chown=bot:bot /app/dist ./dist
 COPY --chown=bot:bot package.json ./
+COPY --chown=bot:bot prompts ./prompts
+COPY --chown=bot:bot notify-tg.sh ./notify-tg.sh
+RUN chmod +x /app/notify-tg.sh
 
 # Volumes mounted by docker-compose:
 #   /data/brain     — the brain repo

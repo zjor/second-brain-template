@@ -12,7 +12,7 @@ const exec = promisify(execFile);
 
 const BRAIN_CWD = "/data/brain";
 const DB_PATH = "/data/db/bot.db";
-const PROMPT_PATH = `${BRAIN_CWD}/.system/services/telegram-bot/prompts/telegram-mode.md`;
+const PROMPT_PATH = "/app/prompts/telegram-mode.md";
 
 function log(level: string, event: string, extra: Record<string, unknown> = {}) {
   console.log(JSON.stringify({ ts: new Date().toISOString(), level, event, ...extra }));
