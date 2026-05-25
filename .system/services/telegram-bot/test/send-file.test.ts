@@ -151,6 +151,29 @@ describe("send-file app", () => {
     expect(deps.sendDocument).not.toHaveBeenCalled();
   });
 
+  it("rejects a sibling directory that shares brainRoot's prefix with 403", async () => {
+    // brainRoot looks like "/tmp/brain-AAA"; create a peer "/tmp/brain-AAA-evil/secret.txt".
+    // The naive prefix check `resolved.startsWith(brainRoot)` would falsely admit this;
+    // the correct check appends "/" to both sides.
+    const { mkdirSync: mk } = await import("node:fs");
+    const evilDir = brainRoot + "-evil";
+    mk(evilDir, { recursive: true });
+    const filePath = join(evilDir, "secret.txt");
+    writeFileSync(filePath, "shh");
+
+    const deps = makeDeps({ brainRoot });
+    const app = createSendFileApp(deps);
+    const res = await app.request("/send-file", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ chat_id: 1, path: filePath, kind: "document" }),
+    });
+
+    expect(res.status).toBe(403);
+    expect(deps.sendDocument).not.toHaveBeenCalled();
+    rmSync(evilDir, { recursive: true, force: true });
+  });
+
   it("rejects payload missing required fields with 400", async () => {
     const deps = makeDeps({ brainRoot });
     const app = createSendFileApp(deps);

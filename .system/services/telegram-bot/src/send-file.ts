@@ -45,6 +45,10 @@ type ResolveResult =
   | { ok: true; resolved: string; size: number }
   | { ok: false; status: 403 | 404 };
 
+/**
+ * Validate that `rawPath` resolves to a regular file inside the brain repo.
+ * @param resolvedBrainRoot must already be realpath'd by the caller (no symlinks, no trailing slash)
+ */
 function resolveBrainPath(rawPath: string, resolvedBrainRoot: string): ResolveResult {
   let resolved: string;
   try {
@@ -52,7 +56,8 @@ function resolveBrainPath(rawPath: string, resolvedBrainRoot: string): ResolveRe
   } catch {
     return { ok: false, status: 404 };
   }
-  const prefix = resolvedBrainRoot.endsWith("/") ? resolvedBrainRoot : resolvedBrainRoot + "/";
+  // realpathSync strips trailing slashes, so resolvedBrainRoot never ends with "/"
+  const prefix = resolvedBrainRoot + "/";
   if (!(resolved + "/").startsWith(prefix)) {
     return { ok: false, status: 403 };
   }
