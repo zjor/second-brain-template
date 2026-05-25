@@ -291,4 +291,23 @@ describe("send-file app", () => {
       parse_mode: "HTML",
     });
   });
+
+  it("returns 502 if the Telegram API call throws", async () => {
+    const filePath = join(brainRoot, "fail.pdf");
+    writeFileSync(filePath, "x");
+
+    const deps = makeDeps({
+      brainRoot,
+      sendDocument: vi.fn().mockRejectedValue(new Error("network down")),
+    });
+    const app = createSendFileApp(deps);
+    const res = await app.request("/send-file", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ chat_id: 1, path: filePath, kind: "document" }),
+    });
+    expect(res.status).toBe(502);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toBe("network down");
+  });
 });
