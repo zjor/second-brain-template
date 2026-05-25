@@ -58,17 +58,29 @@ if os.environ.get("PARSE_MODE"):
     d["parse_mode"] = os.environ["PARSE_MODE"]
 print(json.dumps(d))
 ' 2>/dev/null) || {
-  echo "send-file-tg.sh: failed to build JSON payload (python3 missing?)" >&2
-  exit 2
+  # Python fallback: hand-roll JSON (string fields escaped naively)
+  esc_path=$(printf '%s' "$path" | sed 's/\\/\\\\/g; s/"/\\"/g')
+  payload="{\"chat_id\":${NOTIFY_CHAT_ID},\"path\":\"${esc_path}\",\"kind\":\"${kind}\""
+  if [[ -n "$caption" ]]; then
+    esc_caption=$(printf '%s' "$caption" | sed 's/\\/\\\\/g; s/"/\\"/g')
+    payload="${payload},\"caption\":\"${esc_caption}\""
+  fi
+  if [[ -n "$parse_mode" ]]; then
+    payload="${payload},\"parse_mode\":\"${parse_mode}\""
+  fi
+  payload="${payload}}"
 }
 
-http_code=$(curl -s -o /tmp/send-file-resp -w "%{http_code}" \
+resp=$(mktemp)
+trap 'rm -f "$resp"' EXIT
+
+http_code=$(curl -s -o "$resp" -w "%{http_code}" \
   -X POST "http://127.0.0.1:${port}/send-file" \
   -H "content-type: application/json" \
   -d "$payload")
 
 if [[ "$http_code" != "200" ]]; then
   echo "send-file-tg.sh: HTTP $http_code" >&2
-  cat /tmp/send-file-resp >&2 || true
+  cat "$resp" >&2 || true
   exit 1
 fi
