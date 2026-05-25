@@ -31,6 +31,29 @@ Rejected alternatives:
   limit to one file per turn.
 - Hybrid — two code paths for one feature; not justified for the current scope.
 
+## HTTP Routes
+
+Single Hono server bound to `127.0.0.1:${NOTIFY_PORT}` (default 8080):
+
+| Method | Path         | Handler module      | Behavior                                   |
+|--------|--------------|---------------------|--------------------------------------------|
+| POST   | `/notify`    | `src/notify.ts`     | Text message via `bot.api.sendMessage`     |
+| POST   | `/send-file` | `src/send-file.ts`  | File via `sendDocument` or `sendPhoto`     |
+
+Each factory declares its full absolute path internally (mirrors the
+existing `notify.ts` style — `app.post("/notify", ...)` inside the
+factory, not `app.post("/", ...)` mounted under a prefix). Composition in
+`src/index.ts`:
+
+```ts
+const notifyApp   = createNotifyApp({ ... });    // owns POST /notify
+const sendFileApp = createSendFileApp({ ... });  // owns POST /send-file
+notifyApp.route("/", sendFileApp);               // merge at root
+serve({ fetch: notifyApp.fetch, hostname: "127.0.0.1", port: config.notifyPort });
+```
+
+Single `serve()`, single port, no collision (paths are disjoint).
+
 ## Components
 
 ### New files
