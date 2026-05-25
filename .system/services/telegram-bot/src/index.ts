@@ -7,6 +7,8 @@ import { SessionStore } from "./session";
 import { GitRepo } from "./git";
 import { createBot } from "./bot";
 import { createNotifyApp } from "./notify";
+import { createSendFileApp } from "./send-file";
+import { InputFile } from "grammy";
 
 const exec = promisify(execFile);
 
@@ -46,6 +48,17 @@ async function main(): Promise<void> {
       await bot.api.sendMessage(chatId, text, opts);
     },
   });
+
+  const sendFileApp = createSendFileApp({
+    brainRoot: BRAIN_CWD,
+    sendDocument: async (chatId, buf, name, opts) => {
+      await bot.api.sendDocument(chatId, new InputFile(buf, name), opts);
+    },
+    sendPhoto: async (chatId, buf, name, opts) => {
+      await bot.api.sendPhoto(chatId, new InputFile(buf, name), opts);
+    },
+  });
+  notifyApp.route("/", sendFileApp);
 
   const server = serve({
     fetch: notifyApp.fetch,
