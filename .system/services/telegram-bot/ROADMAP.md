@@ -4,7 +4,7 @@ Living list of next-up features. Status markers: `[ ]` planned · `[~]` in progr
 
 ## Immediate
 
-### [ ] Send files from bot to user
+### [x] Send files from bot to user
 
 **Goal:** allow Claude (and `/notify`-style helpers) to deliver documents and photos back through Telegram, not just text.
 
