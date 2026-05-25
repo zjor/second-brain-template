@@ -222,4 +222,73 @@ describe("send-file app", () => {
     expect(res.status).toBe(413);
     expect(deps.sendPhoto).not.toHaveBeenCalled();
   });
+
+  it("rejects caption longer than 1024 chars with 400", async () => {
+    const filePath = join(brainRoot, "x.pdf");
+    writeFileSync(filePath, "x");
+
+    const deps = makeDeps({ brainRoot });
+    const app = createSendFileApp(deps);
+    const res = await app.request("/send-file", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        chat_id: 1,
+        path: filePath,
+        kind: "document",
+        caption: "x".repeat(1025),
+      }),
+    });
+    expect(res.status).toBe(400);
+    expect(deps.sendDocument).not.toHaveBeenCalled();
+  });
+
+  it("converts default-mode caption to MarkdownV2 via telegramify-markdown", async () => {
+    const filePath = join(brainRoot, "y.pdf");
+    writeFileSync(filePath, "y");
+
+    const deps = makeDeps({ brainRoot });
+    const app = createSendFileApp(deps);
+    const res = await app.request("/send-file", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        chat_id: 1,
+        path: filePath,
+        kind: "document",
+        caption: "Hello *world* (test)",
+      }),
+    });
+    expect(res.status).toBe(200);
+    const opts = deps.sendDocument.mock.calls[0][3] as { caption: string; parse_mode: string };
+    expect(opts.parse_mode).toBe("MarkdownV2");
+    // telegramify-markdown escapes parentheses for MarkdownV2.
+    expect(opts.caption).toContain("\\(");
+    expect(opts.caption).toContain("\\)");
+  });
+
+  it("passes HTML caption through unchanged with parse_mode HTML", async () => {
+    const filePath = join(brainRoot, "z.pdf");
+    writeFileSync(filePath, "z");
+
+    const deps = makeDeps({ brainRoot });
+    const app = createSendFileApp(deps);
+    const html = "<b>bold</b> &amp; safe";
+    const res = await app.request("/send-file", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        chat_id: 1,
+        path: filePath,
+        kind: "document",
+        caption: html,
+        parse_mode: "HTML",
+      }),
+    });
+    expect(res.status).toBe(200);
+    expect(deps.sendDocument.mock.calls[0][3]).toEqual({
+      caption: html,
+      parse_mode: "HTML",
+    });
+  });
 });
