@@ -51,4 +51,30 @@ describe("send-file app", () => {
     expect(call[2]).toBe("report.pdf");                     // filename
     expect(call[3]).toEqual({});                            // no caption → empty opts
   });
+
+  it("sends a photo for a valid in-brain path", async () => {
+    const filePath = join(brainRoot, "sunset.jpg");
+    writeFileSync(filePath, Buffer.from([0xff, 0xd8, 0xff, 0xe0]));
+
+    const deps = makeDeps({ brainRoot });
+    const app = createSendFileApp(deps);
+    const res = await app.request("/send-file", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        chat_id: 7,
+        path: filePath,
+        kind: "photo",
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(deps.sendPhoto).toHaveBeenCalledTimes(1);
+    expect(deps.sendDocument).not.toHaveBeenCalled();
+    const call = deps.sendPhoto.mock.calls[0];
+    expect(call[0]).toBe(7);
+    expect((call[1] as Buffer).length).toBe(4);
+    expect(call[2]).toBe("sunset.jpg");
+    expect(call[3]).toEqual({});  // no caption → empty opts
+  });
 });
