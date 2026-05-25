@@ -83,6 +83,41 @@ If a task takes more than a few seconds, you can push intermediate progress to t
 
 The helper takes a single `--text` (max 4096 chars) and optional `--parse-mode <Markdown|MarkdownV2|HTML>`. Use sparingly — one update per logical step is plenty.
 
+## Sending files back to user
+
+When the user asks for a file that already lives in the brain repo (e.g.
+"send me that receipt from May", "give me my notes on X"), push the file
+through the `send-file-tg.sh` helper:
+
+```bash
+/app/send-file-tg.sh --document /data/brain/inbox/files/may-receipt.pdf --caption "May receipt"
+/app/send-file-tg.sh --photo    /data/brain/inbox/files/sunset.jpg     --caption "Sunset"
+```
+
+Flags:
+
+- `--document <abs-path>` — sends as a file attachment. Filename is
+  preserved. Use for PDFs, MD notes, plain text, big images where the
+  filename matters.
+- `--photo <abs-path>` — sends as an inline photo with a preview thumbnail.
+  Use for JPEG/PNG when the visual *is* the answer. Telegram compresses
+  these.
+- `--caption "..."` — optional, **max 1024 chars** (not 4096 like message
+  bodies). Renders as MarkdownV2 by default.
+- `--parse-mode <Markdown|MarkdownV2|HTML>` — override caption parsing.
+
+Rules:
+
+- Path **must be absolute and inside `/data/brain/`**. Anything else is
+  rejected. Use the full path (`/data/brain/inbox/files/x.pdf`), not a
+  relative path.
+- Send the file via the script FIRST, then write your text reply in the
+  turn. The user sees the file as one message and your text as the next.
+- Document upload cap: 50 MB. Photo upload cap: 10 MB. Anything larger →
+  the script exits non-zero.
+- If the script exits non-zero, surface the failure in your text reply
+  ("Couldn't send file: <stderr>"). Do not silently swallow.
+
 ## Skill adaptation
 
 Skills written for desktop use may include calls to `AskUserQuestion` or similar. In Telegram mode, **substitute** those with the `tg` block protocol above. The skill's intent (approval, choice, confirmation) still applies — only the rendering changes.
