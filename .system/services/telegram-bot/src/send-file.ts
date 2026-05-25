@@ -12,6 +12,11 @@ const sendFileBody = z.object({
   parse_mode: z.enum(["Markdown", "MarkdownV2", "HTML"]).optional(),
 });
 
+const MAX_BYTES: Record<"document" | "photo", number> = {
+  document: 50 * 1024 * 1024,
+  photo:    10 * 1024 * 1024,
+};
+
 export interface SendFileDeps {
   brainRoot: string;
   sendDocument: (
@@ -87,6 +92,11 @@ export function createSendFileApp(deps: SendFileDeps) {
     if (!r.ok) {
       log("warn", "send_file_rejected", { path, kind, status: r.status });
       return c.json({ error: r.status === 403 ? "forbidden" : "not_found" }, r.status);
+    }
+
+    if (r.size > MAX_BYTES[kind]) {
+      log("warn", "send_file_too_large", { path, kind, size: r.size });
+      return c.json({ error: "file_too_large", size: r.size, max: MAX_BYTES[kind] }, 413);
     }
 
     const buf = readFileSync(r.resolved);

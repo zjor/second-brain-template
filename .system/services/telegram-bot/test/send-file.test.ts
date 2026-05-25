@@ -184,4 +184,42 @@ describe("send-file app", () => {
     });
     expect(res.status).toBe(400);
   });
+
+  it("rejects document larger than 50 MB with 413", async () => {
+    const filePath = join(brainRoot, "big.bin");
+    // 50 MB + 1 byte. Use a sparse-ish allocation: Buffer.alloc(1) won't catch
+    // size; we lie about size using truncate.
+    const { openSync, ftruncateSync, closeSync } = await import("node:fs");
+    const fd = openSync(filePath, "w");
+    ftruncateSync(fd, 50 * 1024 * 1024 + 1);
+    closeSync(fd);
+
+    const deps = makeDeps({ brainRoot });
+    const app = createSendFileApp(deps);
+    const res = await app.request("/send-file", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ chat_id: 1, path: filePath, kind: "document" }),
+    });
+    expect(res.status).toBe(413);
+    expect(deps.sendDocument).not.toHaveBeenCalled();
+  });
+
+  it("rejects photo larger than 10 MB with 413", async () => {
+    const filePath = join(brainRoot, "big.jpg");
+    const { openSync, ftruncateSync, closeSync } = await import("node:fs");
+    const fd = openSync(filePath, "w");
+    ftruncateSync(fd, 10 * 1024 * 1024 + 1);
+    closeSync(fd);
+
+    const deps = makeDeps({ brainRoot });
+    const app = createSendFileApp(deps);
+    const res = await app.request("/send-file", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ chat_id: 1, path: filePath, kind: "photo" }),
+    });
+    expect(res.status).toBe(413);
+    expect(deps.sendPhoto).not.toHaveBeenCalled();
+  });
 });
