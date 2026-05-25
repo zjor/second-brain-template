@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { z } from "zod";
-import { realpathSync, readFileSync } from "node:fs";
+import { realpathSync, statSync, readFileSync } from "node:fs";
 import { basename } from "node:path";
 import telegramifyMarkdown from "telegramify-markdown";
 
@@ -41,7 +41,34 @@ function renderCaption(
   return { caption: telegramifyMarkdown(caption, "escape"), parse_mode: "MarkdownV2" };
 }
 
+type ResolveResult =
+  | { ok: true; resolved: string; size: number }
+  | { ok: false; status: 403 | 404 };
+
+function resolveBrainPath(rawPath: string, resolvedBrainRoot: string): ResolveResult {
+  let resolved: string;
+  try {
+    resolved = realpathSync(rawPath);
+  } catch {
+    return { ok: false, status: 404 };
+  }
+  const prefix = resolvedBrainRoot.endsWith("/") ? resolvedBrainRoot : resolvedBrainRoot + "/";
+  if (!(resolved + "/").startsWith(prefix)) {
+    return { ok: false, status: 403 };
+  }
+  let stat;
+  try {
+    stat = statSync(resolved);
+  } catch {
+    return { ok: false, status: 404 };
+  }
+  if (!stat.isFile()) return { ok: false, status: 404 };
+  return { ok: true, resolved, size: stat.size };
+}
+
 export function createSendFileApp(deps: SendFileDeps) {
+  // Resolve once at construction: brainRoot may contain symlinks (e.g. /var → /private/var on darwin).
+  const resolvedBrainRoot = realpathSync(deps.brainRoot);
   const app = new Hono();
   app.post("/send-file", async (c) => {
     const raw = await c.req.json().catch(() => null);
@@ -51,8 +78,14 @@ export function createSendFileApp(deps: SendFileDeps) {
     }
     const { chat_id, path, kind, caption, parse_mode } = parsed.data;
 
-    const buf = readFileSync(realpathSync(path));
-    const filename = basename(realpathSync(path));
+    const r = resolveBrainPath(path, resolvedBrainRoot);
+    if (!r.ok) {
+      log("warn", "send_file_rejected", { path, kind, status: r.status });
+      return c.json({ error: r.status === 403 ? "forbidden" : "not_found" }, r.status);
+    }
+
+    const buf = readFileSync(r.resolved);
+    const filename = basename(r.resolved);
     const opts = renderCaption(caption, parse_mode);
 
     try {

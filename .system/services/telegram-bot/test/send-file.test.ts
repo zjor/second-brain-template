@@ -77,4 +77,88 @@ describe("send-file app", () => {
     expect(call[2]).toBe("sunset.jpg");
     expect(call[3]).toEqual({});  // no caption → empty opts
   });
+
+  it("rejects path outside brainRoot with 403", async () => {
+    const outside = mkdtempSync(join(tmpdir(), "outside-"));
+    const filePath = join(outside, "secret.txt");
+    writeFileSync(filePath, "shh");
+
+    const deps = makeDeps({ brainRoot });
+    const app = createSendFileApp(deps);
+    const res = await app.request("/send-file", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ chat_id: 1, path: filePath, kind: "document" }),
+    });
+
+    expect(res.status).toBe(403);
+    expect(deps.sendDocument).not.toHaveBeenCalled();
+    rmSync(outside, { recursive: true, force: true });
+  });
+
+  it("rejects a symlink that escapes brainRoot with 403", async () => {
+    const outside = mkdtempSync(join(tmpdir(), "outside-"));
+    const target = join(outside, "real.txt");
+    writeFileSync(target, "shh");
+
+    const link = join(brainRoot, "link.txt");
+    const { symlinkSync } = await import("node:fs");
+    symlinkSync(target, link);
+
+    const deps = makeDeps({ brainRoot });
+    const app = createSendFileApp(deps);
+    const res = await app.request("/send-file", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ chat_id: 1, path: link, kind: "document" }),
+    });
+
+    expect(res.status).toBe(403);
+    expect(deps.sendDocument).not.toHaveBeenCalled();
+    rmSync(outside, { recursive: true, force: true });
+  });
+
+  it("rejects path that does not exist with 404", async () => {
+    const deps = makeDeps({ brainRoot });
+    const app = createSendFileApp(deps);
+    const res = await app.request("/send-file", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        chat_id: 1,
+        path: join(brainRoot, "nope.txt"),
+        kind: "document",
+      }),
+    });
+    expect(res.status).toBe(404);
+    expect(deps.sendDocument).not.toHaveBeenCalled();
+  });
+
+  it("rejects a directory path with 404", async () => {
+    mkdirSync(join(brainRoot, "adir"));
+    const deps = makeDeps({ brainRoot });
+    const app = createSendFileApp(deps);
+    const res = await app.request("/send-file", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        chat_id: 1,
+        path: join(brainRoot, "adir"),
+        kind: "document",
+      }),
+    });
+    expect(res.status).toBe(404);
+    expect(deps.sendDocument).not.toHaveBeenCalled();
+  });
+
+  it("rejects payload missing required fields with 400", async () => {
+    const deps = makeDeps({ brainRoot });
+    const app = createSendFileApp(deps);
+    const res = await app.request("/send-file", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ chat_id: 1, kind: "document" }), // missing path
+    });
+    expect(res.status).toBe(400);
+  });
 });
