@@ -1,6 +1,8 @@
 node_modules/
 dist/
 .env
+.env.local
+.env.production
 *.log
 coverage/
 ssh-deploy-key

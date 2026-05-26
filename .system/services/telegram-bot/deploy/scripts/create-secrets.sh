@@ -1,10 +1,11 @@
 #!/bin/bash
 # Create/replace the two Secrets the chart depends on:
-#   <release>-env  — from the existing .env file
-#   <release>-ssh  — from the existing ssh-deploy-key file
+#   <release>-env  — from .env.production
+#   <release>-ssh  — from the ssh-deploy-key file
 #
-# Both source files already exist in .system/services/telegram-bot/ for
-# the docker-compose flow and are gitignored. We reuse them here.
+# .env.production holds the production-flavored env vars (separate from
+# .env.local which docker-compose + pnpm dev read). ssh-deploy-key is the
+# private key for the brain repo. Both files are gitignored.
 #
 # Triggers a rolling restart of the deployment if it exists already.
 
@@ -12,7 +13,7 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SERVICE_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"   # → .system/services/telegram-bot
-ENV_FILE="$SERVICE_DIR/.env"
+ENV_FILE="$SERVICE_DIR/.env.production"
 SSH_KEY="$SERVICE_DIR/ssh-deploy-key"
 
 NS=app-second-brain-bot

@@ -36,14 +36,21 @@ On your side:
 
 From this directory (`.system/services/telegram-bot/`):
 
-### 1. Create `.env`
+### 1. Create env files
+
+Two env files live alongside docker-compose:
+
+- `.env.local` — read by `docker compose` and `pnpm dev`/`start`.
+- `.env.production` — read by `deploy/scripts/create-secrets.sh` for Kubernetes deploys.
 
 ```bash
-cp .env.example .env
-$EDITOR .env
+cp .env.example .env.local
+cp .env.example .env.production
+$EDITOR .env.local
+$EDITOR .env.production
 ```
 
-Fill in the four required vars. Leave `ANTHROPIC_API_KEY` commented out if you'll use OAuth (see below).
+Fill in the four required vars in each. Leave `ANTHROPIC_API_KEY` commented out if you'll use OAuth (see below). Both files are gitignored.
 
 ### 2. Generate a dedicated SSH deploy key
 
@@ -80,11 +87,11 @@ Claude Code launches in an empty container, sees no credentials, prints an OAuth
 
 Tokens land in `/home/bot/.claude/.credentials.json` inside the persistent `bot-home` Docker volume.
 
-Leave `ANTHROPIC_API_KEY` commented out in `.env`.
+Leave `ANTHROPIC_API_KEY` commented out in both `.env.local` and `.env.production`.
 
 #### Option B — API key (pay-as-you-go billed to your Anthropic Console)
 
-Create a key at https://console.anthropic.com/ → API Keys → uncomment and paste into `.env`:
+Create a key at https://console.anthropic.com/ → API Keys → uncomment and paste into `.env.local` (and `.env.production` if deploying):
 
 ```
 ANTHROPIC_API_KEY=sk-ant-...
@@ -293,7 +300,7 @@ The bot is the sole consumer of Telegram updates. For each user message it acqui
 | `notify-tg.sh` | Outbound helper Claude invokes via its Bash tool |
 | `Dockerfile` | Multi-stage build (builder + runtime) |
 | `docker-compose.yml` | Service definition + 3 named volumes |
-| `.env.example` | Template; copy to `.env` and fill in |
+| `.env.example` | Template; copy to `.env.local` and `.env.production` and fill in |
 
 ---
 
@@ -311,8 +318,9 @@ Local execution without Docker is awkward — the entrypoint hard-codes `/data/b
 ## Deploy to Kubernetes (Helm)
 
 A Helm chart lives at `deploy/chart/` and three operator scripts live at
-`deploy/scripts/`. Same `.env` and `ssh-deploy-key` files as the
-docker-compose flow.
+`deploy/scripts/`. The secret-creation script reads `.env.production`
+(separate from `.env.local` used by docker-compose). Same
+`ssh-deploy-key` file is reused.
 
 ```bash
 cd .system/services/telegram-bot
