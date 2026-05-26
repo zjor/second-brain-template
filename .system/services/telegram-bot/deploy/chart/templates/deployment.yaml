@@ -16,6 +16,11 @@ spec:
       labels:
         app: {{ .Release.Name }}
     spec:
+      securityContext:
+        # fsGroup makes Secret/configMap files readable by the bot user (uid 1001,
+        # gid 1001). Required so the seed-home init container can read the
+        # mounted ssh-key Secret (otherwise root:root mode 0400, unreadable).
+        fsGroup: 1001
       initContainers:
         # First-boot seed for bot-home PVC (starts empty, masks the image's
         # baked-in /home/bot/.ssh/). Re-creates:
