@@ -14,7 +14,7 @@ Living list of next-up features. Status markers: `[ ]` planned · `[~]` in progr
 - Document `send-file-tg.sh` in `prompts/telegram-mode.md`.
 - Edge cases: file >50 MB (Telegram bot upload limit) → reject early with clear error.
 
-### [ ] Deploy to Kubernetes via Helm chart
+### [x] Deploy to Kubernetes via Helm chart
 
 **Goal:** one-command deploy onto an existing K8s cluster.
 
