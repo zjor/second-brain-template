@@ -34,4 +34,11 @@ describe("notify app", () => {
     });
     expect(res.status).toBe(500);
   });
+
+  it("GET /healthz returns 200 ok", async () => {
+    const app = createNotifyApp({ sendMessage: vi.fn() });
+    const res = await app.request("/healthz");
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true });
+  });
 });
