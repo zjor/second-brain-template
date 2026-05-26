@@ -25,7 +25,7 @@ spec:
         # Seeds:
         #   - /home/bot/.ssh/known_hosts via ssh-keyscan (git clone over SSH)
         #   - /home/bot/.ssh/id_ed25519 copied from the ssh-key Secret, 0400
-        - name: seed-home
+        - name: seed-volumes
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           securityContext:
             runAsUser: 0
@@ -34,6 +34,7 @@ spec:
             - -c
             - |
               set -e
+              # ssh setup
               mkdir -p /home/bot/.ssh /home/bot/.claude
               chmod 700 /home/bot/.ssh
               if [ ! -s /home/bot/.ssh/known_hosts ]; then
@@ -41,10 +42,17 @@ spec:
               fi
               cp /etc/ssh-key/id_ed25519 /home/bot/.ssh/id_ed25519
               chmod 0400 /home/bot/.ssh/id_ed25519
-              chown -R 1001:1001 /home/bot
+              # chown every PVC root so git/sqlite/claude (running as uid 1001)
+              # don't trip on root-owned parent dirs (local-path-provisioner
+              # creates volume roots root-owned).
+              chown -R 1001:1001 /home/bot /data/brain /data/db
           volumeMounts:
             - name: bot-home
               mountPath: /home/bot
+            - name: brain-data
+              mountPath: /data/brain
+            - name: bot-db
+              mountPath: /data/db
             - name: ssh-key
               mountPath: /etc/ssh-key
               readOnly: true
