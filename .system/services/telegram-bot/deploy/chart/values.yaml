@@ -1,0 +1,31 @@
+# replicaCount is NOT exposed in values — the Deployment template hardcodes
+# replicas: 1 because git lock requires a single writer.
+
+image:
+  repository: zjor/telegram-brain-bot
+  tag: latest    # overridden by deploy-with-helm.sh to git short SHA
+
+storageClass: local-path
+
+persistence:
+  brainData: 2Gi
+  botDb:     100Mi
+  botHome:   1Gi
+
+env:
+  BRAIN_REPO_URL: ""
+  GIT_USER_NAME:  "Brain Bot"
+  GIT_USER_EMAIL: "bot@brain.local"
+  NOTIFY_PORT:    "8080"
+
+secretName:
+  env: telegram-brain-bot-env
+  ssh: telegram-brain-bot-ssh
+
+resources:
+  requests:
+    memory: 256Mi
+    cpu:    100m
+  limits:
+    memory: 1Gi
+    cpu:    1000m

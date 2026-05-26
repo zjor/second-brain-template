@@ -1,0 +1,6 @@
+apiVersion: v2
+name: telegram-brain-bot
+description: Second-brain Telegram bot — Claude Code + grammy in one pod
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
