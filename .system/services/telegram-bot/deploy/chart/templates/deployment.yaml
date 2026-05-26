@@ -16,34 +16,32 @@ spec:
       labels:
         app: {{ .Release.Name }}
     spec:
-      securityContext:
-        # fsGroup makes Secret/configMap files readable by the bot user (uid 1001,
-        # gid 1001). Required so the seed-home init container can read the
-        # mounted ssh-key Secret (otherwise root:root mode 0400, unreadable).
-        fsGroup: 1001
       initContainers:
-        # First-boot seed for bot-home PVC (starts empty, masks the image's
-        # baked-in /home/bot/.ssh/). Re-creates:
-        #   - .ssh/known_hosts via ssh-keyscan (so `git clone` doesn't prompt)
-        #   - .ssh/id_ed25519 copied from the ssh-key Secret with mode 0400
-        # Copy approach is needed because Secret subPath mounts ignore fsGroup,
-        # so a directly subPath-mounted key is owned root:root mode 0400 and
-        # unreadable by the bot user (uid 1001). Copying into the PVC at init
-        # time gives us a bot-owned 0400 file that ssh accepts.
+        # First-boot seed for bot-home PVC. Runs as root so it can:
+        #   - read the ssh-key Secret (mounted root:root mode 0400)
+        #   - write into the PVC regardless of its initial ownership
+        # Finally chowns everything to the bot user (uid 1001) so the main
+        # container (which runs as uid 1001 per Dockerfile USER) can use it.
+        # Seeds:
+        #   - /home/bot/.ssh/known_hosts via ssh-keyscan (git clone over SSH)
+        #   - /home/bot/.ssh/id_ed25519 copied from the ssh-key Secret, 0400
         - name: seed-home
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          securityContext:
+            runAsUser: 0
           command:
             - sh
             - -c
             - |
               set -e
-              mkdir -p /home/bot/.ssh
+              mkdir -p /home/bot/.ssh /home/bot/.claude
               chmod 700 /home/bot/.ssh
               if [ ! -s /home/bot/.ssh/known_hosts ]; then
                 ssh-keyscan -t ed25519 github.com >> /home/bot/.ssh/known_hosts 2>/dev/null
               fi
               cp /etc/ssh-key/id_ed25519 /home/bot/.ssh/id_ed25519
               chmod 0400 /home/bot/.ssh/id_ed25519
+              chown -R 1001:1001 /home/bot
           volumeMounts:
             - name: bot-home
               mountPath: /home/bot
