@@ -1,0 +1,78 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}
+  labels:
+    app: {{ .Release.Name }}
+spec:
+  replicas: 1   # hardcoded — git lock requires a single writer; do not override
+  strategy:
+    type: Recreate   # PVCs are RWO; rolling update would deadlock on volume attach
+  selector:
+    matchLabels:
+      app: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Release.Name }}
+    spec:
+      containers:
+        - name: {{ .Release.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          env:
+            - name: COMMIT_SHA
+              value: "{{ .Values.image.tag }}"
+            {{- range $key, $value := .Values.env }}
+            - name: {{ $key }}
+              value: "{{ $value }}"
+            {{- end }}
+          envFrom:
+            - secretRef:
+                name: {{ .Values.secretName.env }}
+          volumeMounts:
+            - name: brain-data
+              mountPath: /data/brain
+            - name: bot-db
+              mountPath: /data/db
+            - name: bot-home
+              mountPath: /home/bot
+            - name: ssh-key
+              mountPath: /home/bot/.ssh/id_ed25519
+              subPath: id_ed25519
+              readOnly: true
+          livenessProbe:
+            exec:
+              command:
+                - curl
+                - -fs
+                - "http://127.0.0.1:{{ .Values.env.NOTIFY_PORT }}/healthz"
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            failureThreshold: 4
+          readinessProbe:
+            exec:
+              command:
+                - curl
+                - -fs
+                - "http://127.0.0.1:{{ .Values.env.NOTIFY_PORT }}/healthz"
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+{{ toYaml .Values.resources | indent 12 }}
+      volumes:
+        - name: brain-data
+          persistentVolumeClaim:
+            claimName: {{ .Release.Name }}-brain-data
+        - name: bot-db
+          persistentVolumeClaim:
+            claimName: {{ .Release.Name }}-bot-db
+        - name: bot-home
+          persistentVolumeClaim:
+            claimName: {{ .Release.Name }}-bot-home
+        - name: ssh-key
+          secret:
+            secretName: {{ .Values.secretName.ssh }}
+            defaultMode: 0400
+            items:
+              - key: id_ed25519
+                path: id_ed25519
