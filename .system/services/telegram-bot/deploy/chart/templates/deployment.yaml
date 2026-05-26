@@ -16,6 +16,25 @@ spec:
       labels:
         app: {{ .Release.Name }}
     spec:
+      initContainers:
+        # First-boot seed: bot-home PVC starts empty and masks the image's
+        # baked-in /home/bot/.ssh/known_hosts. Re-create it so `git clone`
+        # over SSH works on first pull. Idempotent — skips if file exists.
+        - name: seed-known-hosts
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          command:
+            - sh
+            - -c
+            - |
+              set -e
+              mkdir -p /home/bot/.ssh
+              chmod 700 /home/bot/.ssh
+              if [ ! -s /home/bot/.ssh/known_hosts ]; then
+                ssh-keyscan -t ed25519 github.com >> /home/bot/.ssh/known_hosts 2>/dev/null
+              fi
+          volumeMounts:
+            - name: bot-home
+              mountPath: /home/bot
       containers:
         - name: {{ .Release.Name }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"

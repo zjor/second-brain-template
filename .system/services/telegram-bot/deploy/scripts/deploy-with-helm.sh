@@ -4,6 +4,8 @@
 #   1. The image at that tag has been pushed via docker-build-and-push.sh.
 #   2. The env + ssh Secrets exist via create-secrets.sh.
 
+set -euo pipefail
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CHART="$(cd "$SCRIPT_DIR/../chart" && pwd)"
 

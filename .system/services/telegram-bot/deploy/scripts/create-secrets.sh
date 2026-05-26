@@ -30,17 +30,17 @@ fi
 # Ensure the namespace exists.
 kubectl create namespace "$NS" --dry-run=client -o yaml | kubectl apply -f -
 
-# env secret (envFrom in the deployment).
-kubectl delete secret "${APP}-env" -n "$NS" --ignore-not-found
+# env secret (envFrom in the deployment). Atomic create-or-update.
 kubectl create secret generic "${APP}-env" \
   --from-env-file="$ENV_FILE" \
-  -n "$NS"
+  -n "$NS" \
+  --dry-run=client -o yaml | kubectl apply -f -
 
-# ssh secret mounted at /home/bot/.ssh/id_ed25519 (subPath, mode 0400).
-kubectl delete secret "${APP}-ssh" -n "$NS" --ignore-not-found
+# ssh secret mounted at /home/bot/.ssh/id_ed25519 (subPath, mode 0400). Atomic.
 kubectl create secret generic "${APP}-ssh" \
   --from-file=id_ed25519="$SSH_KEY" \
-  -n "$NS"
+  -n "$NS" \
+  --dry-run=client -o yaml | kubectl apply -f -
 
 # Roll the pod if the deployment is already up so it picks up the new env.
 kubectl rollout restart "deployment/${APP}" -n "$NS" 2>/dev/null || true
