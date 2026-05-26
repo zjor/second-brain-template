@@ -90,3 +90,13 @@ tags: []
 - `/transcribe <audio>` — transcribe an audio file via Deepgram into `inbox/transcripts/`
 - `/index-file [filepath] [destination]` — read a file, summarize it, file it where it belongs
 - `/sync` — pull from remote, merge local changes via a temp branch, push
+
+## Specs and plans
+
+When using the superpowers skills (`brainstorming`, `writing-plans`, etc.):
+- Specs go to `docs/specs/YYYY-MM-DD-<topic>-design.md`
+- Plans go to `docs/plans/YYYY-MM-DD-<topic>.md`
+
+Do **not** use `docs/superpowers/specs/` or `docs/superpowers/plans/` — the
+default paths from those skills. The `superpowers/` namespace is a
+skill-runtime detail, not a project structure concern.
