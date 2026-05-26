@@ -1,0 +1,5 @@
+Deployed {{ .Chart.Name }} v{{ .Values.image.tag }} to namespace {{ .Release.Namespace }}.
+
+Logs:   kubectl logs   -n {{ .Release.Namespace }} deploy/{{ .Release.Name }} -f
+Pods:   kubectl get    -n {{ .Release.Namespace }} pods -w
+Events: kubectl events -n {{ .Release.Namespace }} --for deploy/{{ .Release.Name }}

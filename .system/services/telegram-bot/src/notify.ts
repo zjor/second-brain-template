@@ -17,6 +17,7 @@ export interface NotifyDeps {
 
 export function createNotifyApp(deps: NotifyDeps) {
   const app = new Hono();
+  app.get("/healthz", (c) => c.json({ ok: true }));
   app.post("/notify", async (c) => {
     const raw = await c.req.json().catch(() => null);
     const parsed = notifyBody.safeParse(raw);

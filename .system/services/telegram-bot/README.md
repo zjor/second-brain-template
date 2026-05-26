@@ -307,3 +307,23 @@ pnpm run build         # tsup → dist/index.js (bundled ESM)
 ```
 
 Local execution without Docker is awkward — the entrypoint hard-codes `/data/brain` and `/data/db`. For iterative development, edit source, run `docker compose up -d --build`, then `docker compose logs -f`.
+
+## Deploy to Kubernetes (Helm)
+
+A Helm chart lives at `deploy/chart/` and three operator scripts live at
+`deploy/scripts/`. Same `.env` and `ssh-deploy-key` files as the
+docker-compose flow.
+
+```bash
+cd .system/services/telegram-bot
+./deploy/scripts/docker-build-and-push.sh    # per code change
+./deploy/scripts/create-secrets.sh           # once + when secrets change
+./deploy/scripts/deploy-with-helm.sh         # per release
+```
+
+Notes:
+- Namespace: `app-second-brain-bot`.
+- Storage class: `local-path`. Three PVCs (`-brain-data`, `-bot-db`, `-bot-home`).
+- Single replica — git lock requires a single writer; the chart hardcodes it.
+- `/healthz` on the loopback Hono port is used by k8s exec probes (`curl -fs`).
+- See `.system/docs/specs/2026-05-26-telegram-bot-helm-design.md` for the full design.
