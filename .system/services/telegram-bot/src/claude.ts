@@ -28,7 +28,7 @@ export async function runClaude(opts: RunClaudeOptions): Promise<ClaudeRunResult
   const args = [
     "-p",
     "--output-format", "json",
-    "--append-system-prompt", opts.promptPath,
+    "--append-system-prompt-file", opts.promptPath,
     "--dangerously-skip-permissions",
   ];
   if (opts.sessionId) {
