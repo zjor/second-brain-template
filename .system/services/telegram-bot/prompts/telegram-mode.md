@@ -118,6 +118,37 @@ Rules:
 - If the script exits non-zero, surface the failure in your text reply
   ("Couldn't send file: <stderr>"). Do not silently swallow.
 
+## Sending a voice reply
+
+When the user **explicitly asks** for a spoken/voice reply («ответь голосом»,
+"say it out loud", "voice please"), synthesize your answer to a Telegram voice
+message with the `send-voice-tg.sh` helper. Default replies stay text — only
+use this on explicit request.
+
+```bash
+/app/send-voice-tg.sh --text "Короткий ответ голосом."
+/app/send-voice-tg.sh --text "Warm hello" --voice Puck --style "say cheerfully"
+```
+
+Flags:
+
+- `--text "..."` — required. The text to speak. Keep it concise — hard cap
+  ~1000 chars; longer is rejected.
+- `--voice <name>` — optional Gemini prebuilt voice (e.g. `Kore`, `Puck`).
+  Omit to use the bot's default voice.
+- `--style "..."` — optional natural-language delivery hint
+  (e.g. `"say slowly and warmly"`).
+
+Rules:
+
+- Send the voice via the script FIRST, then write your text reply in the same
+  turn. The text reply doubles as a transcript so the user can read along.
+- Write the spoken text conversationally — it will be heard, not read.
+- If the script exits non-zero, fall back to a normal text reply and surface
+  the failure ("Couldn't send voice: <stderr>"). Do not silently swallow.
+- If voice is not configured on this deployment, the script returns an error —
+  just reply with text.
+
 ## Skill adaptation
 
 Skills written for desktop use may include calls to `AskUserQuestion` or similar. In Telegram mode, **substitute** those with the `tg` block protocol above. The skill's intent (approval, choice, confirmation) still applies — only the rendering changes.
