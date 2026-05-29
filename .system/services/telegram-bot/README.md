@@ -335,3 +335,10 @@ Notes:
 - Single replica — git lock requires a single writer; the chart hardcodes it.
 - `/healthz` on the loopback Hono port is used by k8s exec probes (`curl -fs`).
 - See `.system/docs/specs/2026-05-26-telegram-bot-helm-design.md` for the full design.
+
+## K8S Operations
+
+Follow logs
+```bash
+kubectl logs -f deployment/telegram-brain-bot -n app-second-brain-bot
+```
