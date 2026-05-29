@@ -27,7 +27,7 @@ FROM node:24-slim AS runtime
 WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    git openssh-client ca-certificates curl python3 \
+    git openssh-client ca-certificates curl python3 ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Claude Code CLI globally
@@ -43,7 +43,8 @@ COPY --chown=bot:bot package.json ./
 COPY --chown=bot:bot prompts ./prompts
 COPY --chown=bot:bot notify-tg.sh ./notify-tg.sh
 COPY --chown=bot:bot send-file-tg.sh ./send-file-tg.sh
-RUN chmod +x /app/notify-tg.sh /app/send-file-tg.sh
+COPY --chown=bot:bot send-voice-tg.sh ./send-voice-tg.sh
+RUN chmod +x /app/notify-tg.sh /app/send-file-tg.sh /app/send-voice-tg.sh
 
 # Volumes mounted by docker-compose:
 #   /data/brain     — the brain repo
