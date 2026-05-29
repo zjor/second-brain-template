@@ -28,7 +28,7 @@ Living list of next-up features. Status markers: `[ ]` planned · `[~]` in progr
 - Bake image push into a `Makefile` target (`make image push helm-upgrade`).
 - Document `helm install` in README.
 
-### [ ] Voice reply (TTS)
+### [x] Voice reply (TTS)
 
 **Goal:** Claude can reply with a voice message, not just text.
 

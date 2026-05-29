@@ -41,4 +41,26 @@ describe("loadConfig", () => {
   it("throws when allowlist contains non-numeric ids", () => {
     expect(() => loadConfig({ ...baseEnv, TG_ALLOWED_USER_IDS: "111,abc" })).toThrow();
   });
+
+  it("applies TTS defaults", () => {
+    const cfg = loadConfig(baseEnv);
+    expect(cfg.geminiApiKey).toBeUndefined();
+    expect(cfg.geminiTtsVoice).toBe("Kore");
+    expect(cfg.geminiTtsModel).toBe("gemini-2.5-flash-preview-tts");
+    expect(cfg.ttsMaxChars).toBe(1000);
+  });
+
+  it("overrides TTS vars when provided", () => {
+    const cfg = loadConfig({
+      ...baseEnv,
+      GEMINI_API_KEY: "gm-key",
+      GEMINI_TTS_VOICE: "Puck",
+      GEMINI_TTS_MODEL: "gemini-2.5-pro-preview-tts",
+      TTS_MAX_CHARS: "500",
+    });
+    expect(cfg.geminiApiKey).toBe("gm-key");
+    expect(cfg.geminiTtsVoice).toBe("Puck");
+    expect(cfg.geminiTtsModel).toBe("gemini-2.5-pro-preview-tts");
+    expect(cfg.ttsMaxChars).toBe(500);
+  });
 });

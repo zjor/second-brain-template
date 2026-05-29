@@ -11,6 +11,10 @@ const envSchema = z.object({
   GIT_USER_NAME: z.string().default("Telegram Brain Bot"),
   GIT_USER_EMAIL: z.string().default("bot@localhost"),
   LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).default("info"),
+  GEMINI_API_KEY: z.string().optional(),
+  GEMINI_TTS_VOICE: z.string().default("Kore"),
+  GEMINI_TTS_MODEL: z.string().default("gemini-2.5-flash-preview-tts"),
+  TTS_MAX_CHARS: z.coerce.number().int().positive().default(1000),
 });
 
 export interface Config {
@@ -24,6 +28,10 @@ export interface Config {
   gitUserName: string;
   gitUserEmail: string;
   logLevel: "debug" | "info" | "warn" | "error";
+  geminiApiKey: string | undefined;
+  geminiTtsVoice: string;
+  geminiTtsModel: string;
+  ttsMaxChars: number;
 }
 
 export function loadConfig(env: Record<string, string | undefined> = process.env): Config {
@@ -47,5 +55,9 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     gitUserName: parsed.GIT_USER_NAME,
     gitUserEmail: parsed.GIT_USER_EMAIL,
     logLevel: parsed.LOG_LEVEL,
+    geminiApiKey: parsed.GEMINI_API_KEY,
+    geminiTtsVoice: parsed.GEMINI_TTS_VOICE,
+    geminiTtsModel: parsed.GEMINI_TTS_MODEL,
+    ttsMaxChars: parsed.TTS_MAX_CHARS,
   };
 }
