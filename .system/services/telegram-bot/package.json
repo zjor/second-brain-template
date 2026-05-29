@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@deepgram/sdk": "^4.0.0",
+    "@google/genai": "^1.0.0",
     "@hono/node-server": "^1.13.0",
     "better-sqlite3": "^11.5.0",
     "grammy": "^1.31.0",
