@@ -32,16 +32,34 @@ Living list of next-up features. Status markers: `[ ]` planned · `[~]` in progr
 
 **Goal:** Claude can reply with a voice message, not just text.
 
-- Provider: Deepgram Aura (already have key) or ElevenLabs (better voice quality, separate billing).
-- New module `src/tts.ts`: `synthesize(text: string): Promise<Buffer>` returning OGG/OPUS (Telegram's preferred voice format).
-- Trigger options to decide:
-  - (a) Claude opts in via tg-block field: `"reply_as": "voice"` — model decides per turn.
-  - (b) User toggles via `/voice on` command stored in session.
-  - (c) Auto when user sent voice in.
+Shipped: agent-invoked tool (`send-voice-tg.sh`), explicit-request-only.
+
+- Provider: Google Gemini TTS (`gemini-2.5-flash-preview-tts`) via `@google/genai`.
+- `src/tts.ts`: `synthesizeSpeech` (Gemini → PCM) + `pcmToOggOpus` (ffmpeg → OGG/Opus) + `createTtsApp` (`POST /tts`).
 - Bot path: `bot.api.sendVoice(chat_id, new InputFile(buffer))`.
-- Caveat: long replies = long audio. Cap at ~500 chars or split.
-- Voice prosody hints in system prompt: tell Claude to write conversationally when speaking.
+- Cap: `TTS_MAX_CHARS` (default 1000), over → 400 → text fallback.
+- Voice/style optional per call (`--voice`, `--style`); env default `GEMINI_TTS_VOICE`.
+- Spec: `.system/docs/specs/2026-05-29-telegram-voice-reply-tts-design.md`.
 
 ## Backlog
 
-_(add as new ideas land — keep this file as the single source of truth for what's next on the bot)_
+### [ ] Access logging middleware for the hono server
+
+**Goal:** see endpoint calls (not just error events) in the pod logs.
+
+- Endpoints currently log only on failure; successful `/notify` `/send-file` `/tts` calls are silent.
+- Add `hono/logger` middleware in `src/index.ts` (`notifyApp.use("*", logger())`), or a small JSON success `log()` per route to match the existing structured-log format.
+
+### [ ] Persistent, configurable voice preference
+
+**Goal:** user picks a voice once; it sticks across turns/sessions.
+
+- Today voice is per-call (`--voice`) or a single env default — no per-user state.
+- Add a `/voice` command + inline keyboard to choose a Gemini prebuilt voice.
+- Persist the choice per user in the SQLite session store (`src/session.ts`), survive session TTL expiry.
+- TTS uses the stored voice when `--voice` omitted; explicit flag still overrides.
+
+### [ ] (future) TTS hardening
+
+- ffmpeg timeout guard in `pcmToOggOpus` (kill + reject on hang).
+- Shared `log()` helper (dedupe across `notify.ts`/`send-file.ts`/`tts.ts`).
