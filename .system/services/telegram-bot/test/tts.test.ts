@@ -1,5 +1,6 @@
+import { execSync } from "node:child_process";
 import { describe, it, expect, vi } from "vitest";
-import { createTtsApp, type TtsAppDeps } from "../src/tts";
+import { createTtsApp, type TtsAppDeps, pcmToOggOpus } from "../src/tts";
 
 function makeDeps(overrides: Partial<TtsAppDeps> = {}): TtsAppDeps {
   return {
@@ -90,5 +91,25 @@ describe("tts app", () => {
     expect(res.status).toBe(502);
     const body = (await res.json()) as { error: string };
     expect(body.error).toBe("network down");
+  });
+});
+
+function ffmpegAvailable(): boolean {
+  try {
+    execSync("ffmpeg -version", { stdio: "ignore" });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+describe("pcmToOggOpus", () => {
+  it.skipIf(!ffmpegAvailable())("transcodes PCM to an OGG container", async () => {
+    // 0.1s of silence: 24000 Hz * 0.1s * 2 bytes (s16le) mono.
+    const pcm = Buffer.alloc(24000 * 0.1 * 2);
+    const ogg = await pcmToOggOpus(pcm);
+    expect(ogg.length).toBeGreaterThan(0);
+    // OGG files start with the "OggS" magic.
+    expect(ogg.subarray(0, 4).toString("latin1")).toBe("OggS");
   });
 });
