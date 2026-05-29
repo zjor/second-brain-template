@@ -8,6 +8,7 @@ import { GitRepo } from "./git";
 import { createBot } from "./bot";
 import { createNotifyApp } from "./notify";
 import { createSendFileApp } from "./send-file";
+import { createTtsApp, synthesizeSpeech, pcmToOggOpus } from "./tts";
 import { InputFile } from "grammy";
 
 const exec = promisify(execFile);
@@ -59,6 +60,23 @@ async function main(): Promise<void> {
     },
   });
   notifyApp.route("/", sendFileApp);
+
+  const ttsApp = createTtsApp({
+    maxChars: config.ttsMaxChars,
+    synthesize: config.geminiApiKey
+      ? (text, { voice, style }) =>
+          synthesizeSpeech(text, {
+            voice: voice ?? config.geminiTtsVoice,
+            style,
+            apiKey: config.geminiApiKey!,
+            model: config.geminiTtsModel,
+          }).then(pcmToOggOpus)
+      : null,
+    sendVoice: async (chatId, buf) => {
+      await bot.api.sendVoice(chatId, new InputFile(buf, "voice.ogg"));
+    },
+  });
+  notifyApp.route("/", ttsApp);
 
   const server = serve({
     fetch: notifyApp.fetch,
